@@ -1,0 +1,21 @@
+name = "moq-api-worker"
+
+account_id = "XXX"
+workers_dev = true
+
+main = "src/index.js"
+compatibility_date = "2024-07-22"
+compatibility_flags = ["nodejs_compat"]
+
+[durable_objects]
+bindings = [
+  {name = "ORIGINS", class_name = "Origins"}
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["Origins"]
+
+[[routes]]
+pattern = "cf-api.vivoh.earth/*"
+zone_id = "XXX"
