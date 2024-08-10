@@ -26,7 +26,7 @@ export class Origins {
       if (request.method === "POST") {
         return await this.handlePost(request, namespace, corsHeaders);
       } else if (request.method === "GET") {
-        return await this.handleGet(namespace, corsHeaders);
+        return await this.handleGet(request, namespace, corsHeaders);
       } else if (request.method === "DELETE") {
         return await this.handleDelete(namespace, corsHeaders);
       } else {
@@ -61,13 +61,22 @@ export class Origins {
     }
   }
 
-  async handleGet(namespace, corsHeaders) {
+  async handleGet(request, namespace, corsHeaders) {
     try {
-      const data = await this.state.storage.get(namespace);
+      const edgeParam = new URL(request.url).searchParams.get('edge');
+      let data = await this.state.storage.get(namespace);
+
       if (!data) {
         return new Response(JSON.stringify({ error: "Namespace not found" }), { status: 404, headers: corsHeaders });
       }
-      return new Response(data, { status: 200, headers: corsHeaders });
+
+      let jsonData = JSON.parse(data);
+
+      if (edgeParam && jsonData.url) {
+        jsonData.url = `https://${edgeParam}`;
+      }
+
+      return new Response(JSON.stringify(jsonData), { status: 200, headers: corsHeaders });
     } catch (error) {
       return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
     }
