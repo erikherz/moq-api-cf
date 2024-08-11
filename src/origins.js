@@ -63,7 +63,11 @@ export class Origins {
 
   async handleGet(request, namespace, corsHeaders) {
     try {
-      const edgeParam = new URL(request.url).searchParams.get('edge');
+      const urlParams = new URL(request.url).searchParams;
+      const edgeParam = urlParams.get('edge');
+      const relayHostRegex = urlParams.get('relay_host_regex');
+      const node = urlParams.get('node');
+      
       let data = await this.state.storage.get(namespace);
 
       if (!data) {
@@ -74,6 +78,19 @@ export class Origins {
 
       if (edgeParam && jsonData.url) {
         jsonData.url = `https://${edgeParam}`;
+      }
+
+      if (relayHostRegex && jsonData.url) {
+        const [containsPattern, searchPattern, replacePattern] = relayHostRegex.split('/');
+
+        if (containsPattern && jsonData.url.includes(containsPattern)) {
+          // If the URL contains the specified pattern, leave it unchanged.
+          jsonData.url = jsonData.url;
+        } else if (searchPattern && replacePattern) {
+          // Otherwise, perform the search and replace.
+          const regex = new RegExp(searchPattern, 'g');
+          jsonData.url = jsonData.url.replace(regex, replacePattern);
+        }
       }
 
       return new Response(JSON.stringify(jsonData), { status: 200, headers: corsHeaders });
