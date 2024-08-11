@@ -4,9 +4,10 @@ export class Origins {
     this.env = env;
   }
 
-  async fetch(request) {
+  async fetch(request, env, options) {
     const url = new URL(request.url);
-    const namespace = url.pathname.split("/")[2];
+    const pathname = url.pathname;
+    const namespace = pathname.split("/")[2];
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
@@ -18,93 +19,31 @@ export class Origins {
       return new Response(null, { headers: corsHeaders });
     }
 
-    if (!namespace) {
-      return new Response(JSON.stringify({ error: "Invalid namespace in URL" }), { status: 400, headers: corsHeaders });
-    }
-
     try {
-      if (request.method === "POST") {
-        return await this.handlePost(request, namespace, corsHeaders);
-      } else if (request.method === "GET") {
-        return await this.handleGet(request, namespace, corsHeaders);
-      } else if (request.method === "DELETE") {
-        return await this.handleDelete(namespace, corsHeaders);
-      } else {
-        return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
-      }
-    } catch (error) {
-      console.error("Exception in fetch:", error);
-      return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
-    }
-  }
-
-  async handlePost(request, namespace, corsHeaders) {
-    try {
-      const requestBody = await request.text();
-      let data;
-      try {
-        data = JSON.parse(requestBody);
-      } catch (error) {
-        return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: corsHeaders });
-      }
-
-      if (!data.url) {
-        return new Response(JSON.stringify({ error: "Missing url field in request body" }), { status: 400, headers: corsHeaders });
-      }
-
-      await this.state.storage.put(namespace, JSON.stringify(data));
-
-      const responseContent = { message: "Origin registered", url: data.url };
-      return new Response(JSON.stringify(responseContent), { status: 200, headers: corsHeaders });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: "Failed to read or parse body" }), { status: 500, headers: corsHeaders });
-    }
-  }
-
-  async handleGet(request, namespace, corsHeaders) {
-    try {
-      const urlParams = new URL(request.url).searchParams;
-      const edgeParam = urlParams.get('edge');
-      const relayHostRegex = urlParams.get('relay_host_regex');
-      const node = urlParams.get('node');
-      
+      // Handle the database query normally
       let data = await this.state.storage.get(namespace);
-
       if (!data) {
         return new Response(JSON.stringify({ error: "Namespace not found" }), { status: 404, headers: corsHeaders });
       }
-
+      
       let jsonData = JSON.parse(data);
 
-      if (edgeParam && jsonData.url) {
-        jsonData.url = `https://${edgeParam}`;
-      }
-
-      if (relayHostRegex && jsonData.url) {
-        const [containsPattern, searchPattern, replacePattern] = relayHostRegex.split('/');
-
-        if (containsPattern && jsonData.url.includes(containsPattern)) {
-          // If the URL contains the specified pattern, leave it unchanged.
-          jsonData.url = jsonData.url;
-        } else if (searchPattern && replacePattern) {
-          // Otherwise, perform the search and replace.
-          const regex = new RegExp(searchPattern, 'g');
-          jsonData.url = jsonData.url.replace(regex, replacePattern);
+      // Apply special handling if present
+      if (options && options.specialHandling) {
+        if (options.specialHandling.type === "edge") {
+          jsonData.url = `https://${options.specialHandling.value}`;
+        } else if (options.specialHandling.type === "regex") {
+          const { contains, search, replace } = options.specialHandling;
+          if (jsonData.url.includes(contains)) {
+            const regex = new RegExp(search, 'g');
+            jsonData.url = jsonData.url.replace(regex, replace);
+          }
         }
       }
 
       return new Response(JSON.stringify(jsonData), { status: 200, headers: corsHeaders });
     } catch (error) {
-      return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
-    }
-  }
-
-  async handleDelete(namespace, corsHeaders) {
-    try {
-      await this.state.storage.delete(namespace);
-      const responseContent = { message: "Origin removed" };
-      return new Response(JSON.stringify(responseContent), { status: 200, headers: corsHeaders });
-    } catch (error) {
+      console.error("Error in handleGet:", error);
       return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
     }
   }
