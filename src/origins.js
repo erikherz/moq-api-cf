@@ -4,7 +4,7 @@ export class Origins {
     this.env = env;
   }
 
-  async fetch(request, env, options) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const pathname = url.pathname;
     const namespace = pathname.split("/")[2];
@@ -15,27 +15,22 @@ export class Origins {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
-    console.log(`Request method: ${request.method}, namespace: ${namespace}`);
-
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
     try {
-      if (request.method === "POST") {
-        console.log('Routing to handlePost...');
-        return await this.handlePost(request, namespace, corsHeaders);
-      } else if (request.method === "GET") {
-        console.log('Routing to handleGet...');
-        return await this.handleGet(request, namespace, corsHeaders);
+      if (request.method === "GET") {
+        return this.handleGet(request, namespace, corsHeaders);
+      } else if (request.method === "POST") {
+        return this.handlePost(request, namespace, corsHeaders);
       } else if (request.method === "DELETE") {
-        console.log('Routing to handleDelete...');
-        return await this.handleDelete(namespace, corsHeaders);
+        return this.handleDelete(namespace, corsHeaders);
       } else {
-        return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: "Unsupported method" }), { status: 405, headers: corsHeaders });
       }
     } catch (error) {
-      console.error("Exception in fetch:", error);
+      console.error("Error in fetch:", error);
       return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
     }
   }
@@ -70,7 +65,6 @@ export class Origins {
 
   async handleGet(request, namespace, corsHeaders) {
     try {
-      const edgeParam = new URL(request.url).searchParams.get('edge');
       let data = await this.state.storage.get(namespace);
 
       if (!data) {
@@ -78,10 +72,6 @@ export class Origins {
       }
 
       let jsonData = JSON.parse(data);
-
-      if (edgeParam && jsonData.url) {
-        jsonData.url = `https://${edgeParam}`;
-      }
 
       return new Response(JSON.stringify(jsonData), { status: 200, headers: corsHeaders });
     } catch (error) {
@@ -91,10 +81,8 @@ export class Origins {
   }
 
   async handleDelete(namespace, corsHeaders) {
-    console.log(`handleDelete called for namespace: ${namespace}`);
     try {
       await this.state.storage.delete(namespace);
-      console.log(`Namespace ${namespace} successfully deleted.`);
       const responseContent = { message: "Origin removed" };
       return new Response(JSON.stringify(responseContent), { status: 200, headers: corsHeaders });
     } catch (error) {
