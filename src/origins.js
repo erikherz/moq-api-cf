@@ -15,35 +15,27 @@ export class Origins {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
+    console.log(`Request method: ${request.method}, namespace: ${namespace}`);
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
     try {
-      // Handle the database query normally
-      let data = await this.state.storage.get(namespace);
-      if (!data) {
-        return new Response(JSON.stringify({ error: "Namespace not found" }), { status: 404, headers: corsHeaders });
+      if (request.method === "POST") {
+        console.log('Routing to handlePost...');
+        return await this.handlePost(request, namespace, corsHeaders);
+      } else if (request.method === "GET") {
+        console.log('Routing to handleGet...');
+        return await this.handleGet(request, namespace, corsHeaders);
+      } else if (request.method === "DELETE") {
+        console.log('Routing to handleDelete...');
+        return await this.handleDelete(namespace, corsHeaders);
+      } else {
+        return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
       }
-      
-      let jsonData = JSON.parse(data);
-
-      // Apply special handling if present
-      if (options && options.specialHandling) {
-        if (options.specialHandling.type === "edge") {
-          jsonData.url = `https://${options.specialHandling.value}`;
-        } else if (options.specialHandling.type === "regex") {
-          const { contains, search, replace } = options.specialHandling;
-          if (jsonData.url.includes(contains)) {
-            const regex = new RegExp(search, 'g');
-            jsonData.url = jsonData.url.replace(regex, replace);
-          }
-        }
-      }
-
-      return new Response(JSON.stringify(jsonData), { status: 200, headers: corsHeaders });
     } catch (error) {
-      console.error("Error in handleGet:", error);
+      console.error("Exception in fetch:", error);
       return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500, headers: corsHeaders });
     }
   }
@@ -99,8 +91,10 @@ export class Origins {
   }
 
   async handleDelete(namespace, corsHeaders) {
+    console.log(`handleDelete called for namespace: ${namespace}`);
     try {
       await this.state.storage.delete(namespace);
+      console.log(`Namespace ${namespace} successfully deleted.`);
       const responseContent = { message: "Origin removed" };
       return new Response(JSON.stringify(responseContent), { status: 200, headers: corsHeaders });
     } catch (error) {
